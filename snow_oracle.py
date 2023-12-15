@@ -138,3 +138,67 @@ for technical_rec_id in technical_rec_ids:
 
 
 
+# new
+
+import pandas as pd
+import json
+
+df = pd.read_csv('/Users/ranjithrreddyabbidi/ranjith/ranjith-doc/test.csv')
+
+df.columns = df.columns.str.strip()
+df['source'] = df['source'].str.strip()
+
+df_oracle = df[df['source'].str.lower() == 'oracle']
+df_snowflake = df[df['source'].str.lower() == 'snoflake']
+
+# Merge using both TECHNICAL_REC_ID and uid
+result_df = pd.merge(df_oracle, df_snowflake, on=['TECHNICAL_REC_ID', 'uid'], suffixes=('_OnPrem', '_SF'), how='outer')
+
+df['TECHNICAL_REC_ID'] = df['TECHNICAL_REC_ID'].astype(str)
+result_df['TECHNICAL_REC_ID'] = result_df['TECHNICAL_REC_ID'].astype(str)
+
+technical_rec_ids = result_df[['TECHNICAL_REC_ID', 'uid']].drop_duplicates()
+
+for _, row in technical_rec_ids.iterrows():
+    technical_rec_id = row['TECHNICAL_REC_ID']
+    uid_value = row['uid']
+
+    print(f"{technical_rec_id} - {uid_value}")
+    output_list = []
+    exclude_columns = ['TECHNICAL_REC_ID', 'source', 'uid']
+
+    # Get the rows for the current technical_rec_id and uid
+    filtered_rows = result_df[(result_df['TECHNICAL_REC_ID'] == technical_rec_id) & (result_df['uid'] == uid_value)]
+
+    for _, row in filtered_rows.iterrows():
+        for column_name in df.columns:
+            if column_name not in exclude_columns:
+                on_prem_val = str(row[column_name + '_OnPrem']).strip()
+                sf_val = str(row[column_name + '_SF']).strip() if pd.notna(row[column_name + '_SF']) else None
+                test_result = "Pass" if on_prem_val == sf_val else "Fail"
+
+                output_list.append({
+                    "Column_name": column_name,
+                    "On-prem Val": on_prem_val,
+                    "SF_Val": sf_val,
+                    "Test_Result": test_result,
+                    "Technical_rec_id": str(row['TECHNICAL_REC_ID']),
+                    "uid": uid_value
+                })
+
+    json_output = json.dumps(output_list, indent=2, default=str)
+
+    # Write JSON output to a file using uid column with no spaces
+    # Remove the underscore before uid_value in the filename
+    output_file_path = f'/Users/ranjithrreddyabbidi/ranjith/ranjith-doc/{uid_value.replace(" ", "").replace("-", "")}_{technical_rec_id}_comparison_result.json'
+
+    with open(output_file_path, 'w') as output_file:
+        output_file.write(json_output)
+
+    print(f"Comparison result for {technical_rec_id} and {uid_value} written to {output_file_path}")
+
+
+
+
+
+
